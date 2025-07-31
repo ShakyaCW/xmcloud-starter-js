@@ -11,7 +11,6 @@ SharedFields:
     Import-Function Update-PageTemplate
     Import-Function Update-TemplateInsertOptions
     Import-Function Update-LinkField
-    Import-Function Add-SampleImages
     
     function Invoke-ModuleScriptBody {
         [CmdletBinding()]
@@ -49,9 +48,6 @@ SharedFields:
             $siteName = $Site.Name
             $siteGrouping = Get-Item -Path "$sitePath/Settings/Site Grouping/$($sitename)" -Language $Site.Language
             $siteGrouping.StartItem = $item.ID
-            
-            # Add sample media
-            Add-SampleImages -Site $Site -TemplatePath "/sitecore/templates/Branches/Project/click-click-launch/Alaris/Add Sample Images" -SiteCollection $siteCollection
             
             Write-Verbose "Create page templates in the Site Collection"
             $basePageTemplateId = "{AC9DE9BE-8E86-4147-8FBC-739D5560408B}"
@@ -135,7 +131,6 @@ SharedFields:
             
             $aeroPage = Get-Item -Path "$sitePath/Home/Products/Aero" -Language $Site.Language
             $nexaPage = Get-Item -Path "$sitePath/Home/Products/Nexa" -Language $Site.Language
-            $nexaPageHeader = Get-Item -Path "$sitePath/Home/Products/Nexa/Data/Page Header 1" -Language $Site.Language
             $terraPage = Get-Item -Path "$sitePath/Home/Products/Terra" -Language $Site.Language
             
             Update-LinkField -Item $aeroLink -FieldName "link" -TargetItem $aeroPage
@@ -165,9 +160,8 @@ SharedFields:
             Get-Item -Path "$($item.ItemPath)/Products/Aero/Data/Page Header 2" -Language $Site.Language | Update-LinkField -FieldName "link1" -TargetItem $testDriveItem
             Get-Item -Path "$($item.ItemPath)/Products/Aero/Data/Page Header 2" -Language $Site.Language | Update-LinkField -FieldName "link2" -TargetItem $item
             Get-Item -Path "$($item.ItemPath)/Products/Nexa/Data/Accordion - Nexa - Demo Official" -Language $Site.Language | Update-LinkField -FieldName "link" -TargetItem $nexaPage
-            # Re-enable when page header 2 is added to Nexa
-            # Get-Item -Path "$($item.ItemPath)/Products/Nexa/Data/Page Header 2" -Language $Site.Language | Update-LinkField -FieldName "link1" -TargetItem $testDriveItem
-            # Get-Item -Path "$($item.ItemPath)/Products/Nexa/Data/Page Header 2" -Language $Site.Language | Update-LinkField -FieldName "link2" -TargetItem $item
+            Get-Item -Path "$($item.ItemPath)/Products/Nexa/Data/Page Header 2" -Language $Site.Language | Update-LinkField -FieldName "link1" -TargetItem $testDriveItem
+            Get-Item -Path "$($item.ItemPath)/Products/Nexa/Data/Page Header 2" -Language $Site.Language | Update-LinkField -FieldName "link2" -TargetItem $item
             
             Write-Verbose "Update product pages with the correct taxonomy"
             $productTag = Get-Item -Path "$sitePath/Data/Taxonomy/Content Types/Product" -Language $Site.Language
@@ -201,14 +195,10 @@ SharedFields:
             $renderingHero = Get-Item -Path '/sitecore/layout/Renderings/Project/click-click-launch/Banners/Hero'
             $renderingTextBanner = Get-Item -Path '/sitecore/layout/Renderings/Project/click-click-launch/Banners/TextBanner'
             $renderingImageCarousel = Get-Item -Path '/sitecore/layout/Renderings/Project/click-click-launch/Media/ImageCarousel'
-            $renderingImageGallery = Get-Item -Path '/sitecore/layout/Renderings/Project/click-click-launch/Media/ImageGallery'
-            $renderingPageHeader = Get-Item -Path '/sitecore/layout/Renderings/Project/click-click-launch/Banners/PageHeader'
             $renderingPromo = Get-Item -Path '/sitecore/layout/Renderings/Project/click-click-launch/Promos/Promo'
             $renderingProductListing = Get-Item -Path '/sitecore/layout/Renderings/Project/click-click-launch/Product/ProductListing'
             $renderingAccordion = Get-Item -Path '/sitecore/layout/Renderings/Project/click-click-launch/Accordions/Accordion'
-            $renderingLocationSearch = Get-Item -Path '/sitecore/layout/Renderings/Project/click-click-launch/Location Search/Location Search'
-            $renderingSubmissionForm = Get-Item -Path '/sitecore/layout/Renderings/Project/click-click-launch/Forms/Submission Form'
-    
+        
             # prepare rendering definitions
             $renderingContainerFullBleedDefinition = $renderingContainerFullBleed | New-Rendering
             $renderingHeroDefinition = $renderingHero | New-Rendering
@@ -217,29 +207,20 @@ SharedFields:
             $renderingPromoDefinition = $renderingPromo | New-Rendering
             $renderingProductListingDefinition = $renderingProductListing | New-Rendering
             $renderingAccordionDefinition = $renderingAccordion | New-Rendering
-            $locSearchVariants = $service.GetAvailableRenderingVariants($Site, $renderingLocationSearch.Name, $renderingLocationSearch.ID, $item.TemplateID)
-            $subFormVariants = $service.GetAvailableRenderingVariants($Site, $renderingSubmissionForm.Name, $renderingSubmissionForm.ID, $item.TemplateID)
-    
+            
             # prepare rendering variants  
             $heroVariants = $service.GetAvailableRenderingVariants($Site, $renderingHero.Name, $renderingHero.ID, $item.TemplateID)
             $textBannerVariants = $service.GetAvailableRenderingVariants($Site, $renderingTextBanner.Name, $renderingTextBanner.ID, $item.TemplateID)
             $imageCarouselVariants = $service.GetAvailableRenderingVariants($Site, $renderingImageCarousel.Name, $renderingImageCarousel.ID, $item.TemplateID)
             $promoVariants = $service.GetAvailableRenderingVariants($Site, $renderingPromo.Name, $renderingPromo.ID, $item.TemplateID)
             $accordionVariants = $service.GetAvailableRenderingVariants($Site, $renderingAccordion.Name, $renderingAccordion.ID, $item.TemplateID)
-            $imageGalleryVariants = $service.GetAvailableRenderingVariants($Site, $renderingImageGallery.Name, $renderingImageGallery.ID, $item.TemplateID)
-            $pageHeaderVariants = $service.GetAvailableRenderingVariants($Site, $renderingPageHeader.Name, $renderingPageHeader.ID, $item.TemplateID)
     
             $heroVariant = $heroVariants | Where-Object { $_.DisplayName -eq "Image Background" }
             $textBannerVariant = $textBannerVariants | Where-Object { $_.Name -eq "Default" }
             $imageCarouselVariant = $imageCarouselVariants | Where-Object { $_.Name -eq "Default" }
             $promoVariant = $promoVariants | Where-Object { $_.Name -eq "Default" }
             $accordionVariant = $accordionVariants | Where-Object { $_.Name -eq "Default" }
-            $accordion5050Variant = $accordionVariants | Where-Object { $_.Name -eq "Fifty Fifty Title Above" }
-            $imageGalleryVariant = $imageGalleryVariants | Where-Object { $_.Name -eq "Default" }
-            $pageHeaderVariant = $pageHeaderVariants | Where-Object { $_.Name -eq "Default" }
-            $locSearchVariant = $locSearchVariants | Where-Object { $_.Name -eq "Default" }
-            $subFormVariant = $subFormVariants | Where-Object { $_.Name -eq "Default" }
-    
+            
             # add Home layout
             Add-Rendering -Item $item -PlaceHolder "headless-main" -Instance $renderingContainerFullBleedDefinition -Parameter @{ "DynamicPlaceholderId" = "1"; "excludeTopMargin" = "1" } -FinalLayout
             Add-Rendering -Item $item -PlaceHolder "/headless-main/container-fullbleed-1" -Instance $renderingHeroDefinition -Parameter @{ "FieldNames" = $heroVariant.ID; "DynamicPlaceholderId" = "2" } -DataSource "local:/Data/Home Page Hero" -FinalLayout
