@@ -207,8 +207,6 @@ SharedFields:
             $renderingHeroDefinition = $renderingHero | New-Rendering
             $renderingTextBannerDefinition = $renderingTextBanner | New-Rendering
             $renderingImageCarouselDefinition = $renderingImageCarousel | New-Rendering
-            $renderingImageGalleryDefinition = $renderingImageGallery | New-Rendering
-            $renderingPageHeaderDefinition = $renderingPageHeader | New-Rendering
             $renderingPromoDefinition = $renderingPromo | New-Rendering
             $renderingProductListingDefinition = $renderingProductListing | New-Rendering
             $renderingAccordionDefinition = $renderingAccordion | New-Rendering
@@ -229,12 +227,24 @@ SharedFields:
             $imageCarouselVariant = $imageCarouselVariants | Where-Object { $_.Name -eq "Default" }
             $promoVariant = $promoVariants | Where-Object { $_.Name -eq "Default" }
             $accordionVariant = $accordionVariants | Where-Object { $_.Name -eq "Default" }
-            $accordionCenteredVariant = $accordionVariants | Where-Object { $_.Name -eq "Centered" }
             $accordion5050Variant = $accordionVariants | Where-Object { $_.Name -eq "Fifty Fifty Title Above" }
+            $accordionCenteredVariant = $accordionVariants | Where-Object { $_.Name -eq "Centered" }
             $imageGalleryVariant = $imageGalleryVariants | Where-Object { $_.Name -eq "Default" }
             $pageHeaderVariant = $pageHeaderVariants | Where-Object { $_.Name -eq "Default" }
             $locSearchVariant = $locSearchVariants | Where-Object { $_.Name -eq "Default" }
             $subFormVariant = $subFormVariants | Where-Object { $_.Name -eq "Default" }
+
+            # Validate that required variants exist
+            if (-not $imageGalleryVariant) {
+                Write-Warning "ImageGallery 'Default' variant not found"
+            }
+            if (-not $pageHeaderVariant) {
+                Write-Warning "PageHeader 'Default' variant not found"
+            }
+            if (-not $accordionCenteredVariant) {
+                Write-Warning "Accordion 'Centered' variant not found, using Default variant instead"
+                $accordionCenteredVariant = $accordionVariant
+            }
     
             # add Home layout
             Add-Rendering -Item $item -PlaceHolder "headless-main" -Instance $renderingContainerFullBleedDefinition -Parameter @{ "DynamicPlaceholderId" = "1"; "excludeTopMargin" = "1" } -FinalLayout
@@ -247,10 +257,10 @@ SharedFields:
     
             # update Nexa product
             Get-Rendering -Item $nexaPage -Rendering $renderingImageGallery -FinalLayout | `
-                Set-RenderingParameter -Parameter @{ "FieldNames" = $imageGalleryVariant.ID } | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = if ($imageGalleryVariant) { $imageGalleryVariant.ID } else { "" } } | `
                 Set-Rendering -Item $nexaPage -FinalLayout            
             Get-Rendering -Item $nexaPage -Rendering $renderingPageHeader -FinalLayout | `
-                Set-RenderingParameter -Parameter @{ "FieldNames" = $pageHeaderVariant.ID } | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = if ($pageHeaderVariant) { $pageHeaderVariant.ID } else { "" } } | `
                 Set-Rendering -Item $nexaPage -FinalLayout
             Get-Rendering -Item $nexaPage -Rendering $renderingTextBanner -FinalLayout | `
                 Set-RenderingParameter -Parameter @{ "FieldNames" = $textBannerVariant.ID } | `
@@ -259,23 +269,23 @@ SharedFields:
                 Set-RenderingParameter -Parameter @{ "FieldNames" = $promoVariant.ID } | `
                 Set-Rendering -Item $nexaPage -FinalLayout
             Get-Rendering -Item $nexaPage -Rendering $renderingAccordion -FinalLayout | `
-                Set-RenderingParameter -Parameter @{ "FieldNames" = $accordionCenteredVariant.ID } | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = if ($accordionCenteredVariant) { $accordionCenteredVariant.ID } else { "" } } | `
                 Set-Rendering -Item $nexaPage -FinalLayout
             Update-LinkField -Item $nexaPageHeader -FieldName "link1" -TargetItem $testDriveItem
             Update-LinkField -Item $nexaPageHeader -FieldName "link2" -TargetItem $item
             # update Aero product
             Get-Rendering -Item $aeroPage -Rendering $renderingImageGallery -FinalLayout | `
-                Set-RenderingParameter -Parameter @{ "FieldNames" = $imageGalleryVariant.ID } | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = if ($imageGalleryVariant) { $imageGalleryVariant.ID } else { "" } } | `
                 Set-Rendering -Item $aeroPage -FinalLayout
             Get-Rendering -Item $aeroPage -Rendering $renderingPageHeader -FinalLayout | `
-                Set-RenderingParameter -Parameter @{ "FieldNames" = $pageHeaderVariant.ID } | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = if ($pageHeaderVariant) { $pageHeaderVariant.ID } else { "" } } | `
                 Set-Rendering -Item $aeroPage -FinalLayout
             Get-Rendering -Item $aeroPage -Rendering $renderingTextBanner -FinalLayout | `
                 Set-RenderingParameter -Parameter @{ "FieldNames" = $textBannerVariant.ID } | `
                 Set-Rendering -Item $aeroPage -FinalLayout
             # update Test Drive landing
             Get-Rendering -Item $testDriveItem -Rendering $renderingPageHeader -FinalLayout | `
-                Set-RenderingParameter -Parameter @{ "FieldNames" = $pageHeaderVariant.ID } | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = if ($pageHeaderVariant) { $pageHeaderVariant.ID } else { "" } } | `
                 Set-Rendering -Item $testDriveItem -FinalLayout
             Get-Rendering -Item $testDriveItem -Rendering $renderingPromo -FinalLayout | `
                 Set-RenderingParameter -Parameter @{ "FieldNames" = $promoVariant.ID } | `
