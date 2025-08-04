@@ -37,18 +37,15 @@ SharedFields:
             $item = Get-Item -Path "$sitePath/Home" -Language $Site.Language
             Write-Verbose "My site: $sitePath"
             
-            # handle missing styles folder
-            if (-not (Test-Path "$sitePath/Presentation/Styles")) {
-                Import-Function Invoke-AddItem
-                $action = Get-Item . -ID '{B2486523-7487-4526-978F-AD2E986B5CC4}'
-                Invoke-AddItem $Site $action
-            }
-            
             Write-Verbose "Reset the start item and the rendering host"
             # reset the start item and the rendering host
             $siteName = $Site.Name
-            $siteGrouping = Get-Item -Path "$sitePath/Settings/Site Grouping/$($sitename)" -Language $Site.Language
-            $siteGrouping.StartItem = $item.ID
+            $siteGrouping = Get-Item -Path "$sitePath/Settings/Site Grouping/$($siteName)" -Language $Site.Language -ErrorAction SilentlyContinue
+            if ($siteGrouping) {
+                $siteGrouping.StartItem = $item.ID
+            } else {
+                Write-Warning "Site grouping not found for: $siteName"
+            }
             
             # Add sample media
             Add-SampleImages -Site $Site -TemplatePath "/sitecore/templates/Branches/Project/click-click-launch/Alaris/Add Sample Images" -SiteCollection $siteCollection
@@ -82,7 +79,6 @@ SharedFields:
             Update-TemplateInsertOptions -TemplateItem $audioPageTemplate -InsertOptions $insertOptions
             Update-TemplateInsertOptions -TemplateItem $articlePageTemplate -InsertOptions $insertOptions
             Update-TemplateInsertOptions -TemplateItem $detailPageTemplate -InsertOptions $insertOptions
-            Update-TemplateInsertOptions -TemplateItem $articlePageTemplate -InsertOptions $insertOptions
             Update-TemplateInsertOptions -TemplateItem $landingPageTemplate -InsertOptions $insertOptions
             Update-TemplateInsertOptions -TemplateItem $productPageTemplate -InsertOptions $insertOptions
             Update-TemplateInsertOptions -TemplateItem $pageFolderTemplate -InsertOptions $insertOptions
@@ -94,9 +90,9 @@ SharedFields:
     
             $defaultPageDesign = New-Item -Path "$($sitePath)/Presentation/Page Designs" -Name "Default" -ItemType "{1105B8F8-1E00-426B-BF1F-C840742D827B}"
             $defaultPageDesign.PartialDesigns = "$($headerPartial.ID)|$($footerPartial.ID)"
-    
-            $productPageDesign = New-Item -Path "$($sitePath)/Presentation/Page Designs" -Name "ProductPage" -ItemType "{1105B8F8-1E00-426B-BF1F-C840742D827B}"
-            $productPageDesign.PartialDesigns = "$($headerPartial.ID)|$($footerPartial.ID)"
+            
+            # Create product page design for audio products
+            $productPageDesign = $defaultPageDesign  # Use default design for now
     
             $pageDesigns = Get-Item -path "$sitePath/Presentation/Page Designs" -Language $Site.Language
             $map = [Sitecore.Text.UrlString]::new()
@@ -106,7 +102,7 @@ SharedFields:
             $map[$articlePageTemplate.ID] = "$($defaultPageDesign.ID)"
             $map[$detailPageTemplate.ID] = "$($defaultPageDesign.ID)"
             $map[$landingPageTemplate.ID] = "$($defaultPageDesign.ID)"
-            $map[$productPageTemplate.ID] = "$($productPageDesign.ID)"
+            $map[$productPageTemplate.ID] = "$($defaultPageDesign.ID)"
             $pageDesigns.TemplatesMapping = [System.Web.HttpUtility]::UrlEncode($map.toString())
             
             Write-Verbose "Update Partial Design Rendering Variants"
@@ -123,19 +119,11 @@ SharedFields:
             
             $globalHeaderRenderingInstance = Get-Rendering -Item $headerPartial -Rendering $renderingGlobalHeader -FinalLayout
             if ($globalHeaderRenderingInstance) {
-                if ($globalHeaderVariant) {
-                    Set-Rendering -Item $headerPartial -Instance $globalHeaderRenderingInstance -Parameter @{ "FieldNames" = $globalHeaderVariant.ID } -FinalLayout
-                } else {
-                    Set-Rendering -Item $headerPartial -Instance $globalHeaderRenderingInstance -FinalLayout
-                }
+                Set-Rendering -Item $headerPartial -Instance $globalHeaderRenderingInstance -Parameter @{ "FieldNames" = $globalHeaderVariant.ID } -FinalLayout
             }
             $globalFooterRenderingInstance = Get-Rendering -Item $footerPartial -Rendering $renderingGlobalFooter -FinalLayout
             if ($globalFooterRenderingInstance) {
-                if ($globalFooterVariant) {
-                    Set-Rendering -Item $footerPartial -Instance $globalFooterRenderingInstance -Parameter @{ "FieldNames" = $globalFooterVariant.ID } -FinalLayout
-                } else {
-                    Set-Rendering -Item $footerPartial -Instance $globalFooterRenderingInstance -FinalLayout
-                }
+                Set-Rendering -Item $footerPartial -Instance $globalFooterRenderingInstance -Parameter @{ "FieldNames" = $globalFooterVariant.ID } -FinalLayout
             }
             
             Write-Verbose "Update header links"
@@ -153,9 +141,16 @@ SharedFields:
             Update-LinkField -Item $nexaLink -FieldName "link" -TargetItem $nexaPage
             Update-LinkField -Item $terraLink -FieldName "link" -TargetItem $terraPage
             
-            $headerDatasource.Editing.BeginEdit()
-            $headerDatasource["primaryNavigationLinks"] = "$($aeroLink.ID)|$($nexaLink.ID)|$($terraLink.ID)"
-            $headerDatasource.Editing.EndEdit()
+            try {
+                $headerDatasource.Editing.BeginEdit()
+                $headerDatasource["primaryNavigationLinks"] = "$($aeroLink.ID)|$($nexaLink.ID)|$($terraLink.ID)"
+                $headerDatasource.Editing.EndEdit()
+            } catch {
+                Write-Error "Failed to update header datasource: $_"
+                if ($headerDatasource.Editing.IsEditing) {
+                    $headerDatasource.Editing.CancelEdit()
+                }
+            }
             
             $testDriveItem = $item.Children["Test Drive"]
             Update-LinkField -Item $headerDatasource -FieldName "headerContact" -TargetItem $testDriveItem
@@ -163,9 +158,16 @@ SharedFields:
             Update-LinkField -Item $homePageHeroItem -FieldName "bannerCTA" -TargetItem $testDriveItem
             
             $homePageProductListingItem = Get-Item -Path "$($item.ItemPath)/Data/Home Page Product Listing" -Language $Site.Language
-            $homePageProductListingItem.Editing.BeginEdit()
-            $homePageProductListingItem["products"] = "$($aeroPage.ID)|$($nexaPage.ID)|$($terraPage.ID)"
-            $homePageProductListingItem.Editing.EndEdit()
+            try {
+                $homePageProductListingItem.Editing.BeginEdit()
+                $homePageProductListingItem["products"] = "$($aeroPage.ID)|$($nexaPage.ID)|$($terraPage.ID)"
+                $homePageProductListingItem.Editing.EndEdit()
+            } catch {
+                Write-Error "Failed to update home page product listing: $_"
+                if ($homePageProductListingItem.Editing.IsEditing) {
+                    $homePageProductListingItem.Editing.CancelEdit()
+                }
+            }
             
             Get-Item -Path "$($item.ItemPath)/Data/Home Page Image Carousel/Slide 1" -Language $Site.Language | Update-LinkField -FieldName "link" -TargetItem $aeroPage
             Get-Item -Path "$($item.ItemPath)/Data/Home Page Image Carousel/Slide 2" -Language $Site.Language | Update-LinkField -FieldName "link" -TargetItem $nexaPage
@@ -183,29 +185,40 @@ SharedFields:
             Write-Verbose "Update product pages with the correct taxonomy"
             $productTag = Get-Item -Path "$sitePath/Data/Taxonomy/Content Types/Product" -Language $Site.Language
             
-            $aeroPage.Editing.BeginEdit()
-            $aeroPage["taxContentType"] = $productTag.ID
-            $aeroPage.Editing.EndEdit()
+            try {
+                $aeroPage.Editing.BeginEdit()
+                $aeroPage["taxContentType"] = $productTag.ID
+                $aeroPage.Editing.EndEdit()
+            } catch {
+                Write-Error "Failed to update aero page taxonomy: $_"
+                if ($aeroPage.Editing.IsEditing) {
+                    $aeroPage.Editing.CancelEdit()
+                }
+            }
             
-            $nexaPage.Editing.BeginEdit()
-            $nexaPage["taxContentType"] = $productTag.ID
-            $nexaPage.Editing.EndEdit()
+            try {
+                $nexaPage.Editing.BeginEdit()
+                $nexaPage["taxContentType"] = $productTag.ID
+                $nexaPage.Editing.EndEdit()
+            } catch {
+                Write-Error "Failed to update nexa page taxonomy: $_"
+                if ($nexaPage.Editing.IsEditing) {
+                    $nexaPage.Editing.CancelEdit()
+                }
+            }
             
-            $terraPage.Editing.BeginEdit()
-            $terraPage["taxContentType"] = $productTag.ID
-            $terraPage.Editing.EndEdit()
+            try {
+                $terraPage.Editing.BeginEdit()
+                $terraPage["taxContentType"] = $productTag.ID
+                $terraPage.Editing.EndEdit()
+            } catch {
+                Write-Error "Failed to update terra page taxonomy: $_"
+                if ($terraPage.Editing.IsEditing) {
+                    $terraPage.Editing.CancelEdit()
+                }
+            }
     
-            Write-Verbose "Update the home page template"
-            # Update the home page template
-            Set-ItemTemplate -Item $item -Template $homePageTemplate.ID
-            # Re-get the item with the new base template
-            $item = Get-Item -Path "$sitePath/Home" -Language $Site.Language
-            
-            Set-ItemTemplate -Path "$sitePath/Home/Products" -Template $pageFolderTemplate.ID
-            Set-ItemTemplate -Path "$sitePath/Home/Test Drive" -Template $landingPageTemplate.ID
-            Set-ItemTemplate -Path "$sitePath/Home/Products/Aero" -Template $productPageTemplate.ID
-            Set-ItemTemplate -Path "$sitePath/Home/Products/Nexa" -Template $productPageTemplate.ID
-            Set-ItemTemplate -Path "$sitePath/Home/Products/Terra" -Template $productPageTemplate.ID
+            # Template assignment moved earlier to prevent layout issues
     
             Write-Verbose "Update the home page renderings"
             $renderingContainerFullBleed = Get-Item -Path '/sitecore/layout/Renderings/Project/click-click-launch/Page Structure/Container Full Bleed'
@@ -252,10 +265,18 @@ SharedFields:
             $locSearchVariant = $locSearchVariants | Where-Object { $_.Name -eq "Default" }
             $subFormVariant = $subFormVariants | Where-Object { $_.Name -eq "Default" }
     
-            # Ensure variants exist with fallbacks
-            if (!$accordionCenteredVariant) { $accordionCenteredVariant = $accordionVariant }
-            if (!$imageGalleryVariant) { Write-Warning "ImageGallery Default variant not found" }
-            if (!$pageHeaderVariant) { Write-Warning "PageHeader Default variant not found" }
+            Write-Verbose "Update the home page template FIRST - before adding renderings"
+            # CRITICAL: Update the home page template BEFORE adding renderings to prevent empty main section on deployment
+            Set-ItemTemplate -Item $item -Template $homePageTemplate.ID
+            # Re-get the item with the new base template
+            $item = Get-Item -Path "$sitePath/Home" -Language $Site.Language
+            
+            # Update other page templates
+            Set-ItemTemplate -Path "$sitePath/Home/Products" -Template $pageFolderTemplate.ID
+            Set-ItemTemplate -Path "$sitePath/Home/Test Drive" -Template $landingPageTemplate.ID
+            Set-ItemTemplate -Path "$sitePath/Home/Products/Aero" -Template $productPageTemplate.ID
+            Set-ItemTemplate -Path "$sitePath/Home/Products/Nexa" -Template $productPageTemplate.ID
+            Set-ItemTemplate -Path "$sitePath/Home/Products/Terra" -Template $productPageTemplate.ID
     
             # add Home layout
             Add-Rendering -Item $item -PlaceHolder "headless-main" -Instance $renderingContainerFullBleedDefinition -Parameter @{ "DynamicPlaceholderId" = "1"; "excludeTopMargin" = "1" } -FinalLayout
@@ -267,144 +288,49 @@ SharedFields:
             Add-Rendering -Item $item -PlaceHolder "/headless-main/container-fullbleed-1" -Instance $renderingAccordionDefinition -Parameter @{ "FieldNames" = $accordionVariant.ID; "DynamicPlaceholderId" = "6" } -DataSource "local:/Data/Home Page Accordion" -FinalLayout
     
             # update Nexa product
-            Write-Verbose "Updating Nexa product renderings"
-            
-            # Add renderings to Nexa page if they don't exist
-            $nexaImageGalleryRendering = Get-Rendering -Item $nexaPage -Rendering $renderingImageGallery -FinalLayout
-            if (!$nexaImageGalleryRendering) {
-                Write-Verbose "Adding ImageGallery rendering to Nexa page"
-                $renderingImageGalleryDefinition = $renderingImageGallery | New-Rendering
-                Add-Rendering -Item $nexaPage -PlaceHolder "headless-main" -Instance $renderingImageGalleryDefinition -FinalLayout
-                $nexaImageGalleryRendering = Get-Rendering -Item $nexaPage -Rendering $renderingImageGallery -FinalLayout
-            }
-            if ($nexaImageGalleryRendering) {
-                Write-Verbose "Found ImageGallery rendering on Nexa page"
-                if ($imageGalleryVariant) {
-                    Set-Rendering -Item $nexaPage -Instance $nexaImageGalleryRendering -Parameter @{ "FieldNames" = $imageGalleryVariant.ID } -FinalLayout
-                } else {
-                    Set-Rendering -Item $nexaPage -Instance $nexaImageGalleryRendering -FinalLayout
-                }
-            }
-            
-            $nexaPageHeaderRendering = Get-Rendering -Item $nexaPage -Rendering $renderingPageHeader -FinalLayout
-            if (!$nexaPageHeaderRendering) {
-                Write-Verbose "Adding PageHeader rendering to Nexa page"
-                $renderingPageHeaderDefinition = $renderingPageHeader | New-Rendering
-                Add-Rendering -Item $nexaPage -PlaceHolder "headless-main" -Instance $renderingPageHeaderDefinition -FinalLayout
-                $nexaPageHeaderRendering = Get-Rendering -Item $nexaPage -Rendering $renderingPageHeader -FinalLayout
-            }
-            if ($nexaPageHeaderRendering) {
-                Write-Verbose "Found PageHeader rendering on Nexa page"
-                if ($pageHeaderVariant) {
-                    Set-Rendering -Item $nexaPage -Instance $nexaPageHeaderRendering -Parameter @{ "FieldNames" = $pageHeaderVariant.ID } -FinalLayout
-                } else {
-                    Set-Rendering -Item $nexaPage -Instance $nexaPageHeaderRendering -FinalLayout
-                }
-            }
+            Get-Rendering -Item $nexaPage -Rendering $renderingImageGallery -FinalLayout | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = $imageGalleryVariant.ID } | `
+                Set-Rendering -Item $nexaPage -FinalLayout            
+            Get-Rendering -Item $nexaPage -Rendering $renderingPageHeader -FinalLayout | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = $pageHeaderVariant.ID } | `
+                Set-Rendering -Item $nexaPage -FinalLayout
             Get-Rendering -Item $nexaPage -Rendering $renderingTextBanner -FinalLayout | `
                 Set-RenderingParameter -Parameter @{ "FieldNames" = $textBannerVariant.ID } | `
                 Set-Rendering -Item $nexaPage -FinalLayout
             Get-Rendering -Item $nexaPage -Rendering $renderingPromo -FinalLayout | `
                 Set-RenderingParameter -Parameter @{ "FieldNames" = $promoVariant.ID } | `
                 Set-Rendering -Item $nexaPage -FinalLayout
-            $nexaAccordionRendering = Get-Rendering -Item $nexaPage -Rendering $renderingAccordion -FinalLayout
-            if ($nexaAccordionRendering) {
-                if ($accordionCenteredVariant) {
-                    Set-Rendering -Item $nexaPage -Instance $nexaAccordionRendering -Parameter @{ "FieldNames" = $accordionCenteredVariant.ID } -FinalLayout
-                } else {
-                    Set-Rendering -Item $nexaPage -Instance $nexaAccordionRendering -FinalLayout
-                }
-            }
+            Get-Rendering -Item $nexaPage -Rendering $renderingAccordion -FinalLayout | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = $accordionCenteredVariant.ID } | `
+                Set-Rendering -Item $nexaPage -FinalLayout
             Update-LinkField -Item $nexaPageHeader -FieldName "link1" -TargetItem $testDriveItem
             Update-LinkField -Item $nexaPageHeader -FieldName "link2" -TargetItem $item
             # update Aero product
-            Write-Verbose "Updating Aero product renderings"
-            
-            # Add renderings to Aero page if they don't exist
-            $aeroImageGalleryRendering = Get-Rendering -Item $aeroPage -Rendering $renderingImageGallery -FinalLayout
-            if (!$aeroImageGalleryRendering) {
-                Write-Verbose "Adding ImageGallery rendering to Aero page"
-                $renderingImageGalleryDefinition = $renderingImageGallery | New-Rendering
-                Add-Rendering -Item $aeroPage -PlaceHolder "headless-main" -Instance $renderingImageGalleryDefinition -FinalLayout
-                $aeroImageGalleryRendering = Get-Rendering -Item $aeroPage -Rendering $renderingImageGallery -FinalLayout
-            }
-            if ($aeroImageGalleryRendering) {
-                if ($imageGalleryVariant) {
-                    Set-Rendering -Item $aeroPage -Instance $aeroImageGalleryRendering -Parameter @{ "FieldNames" = $imageGalleryVariant.ID } -FinalLayout
-                } else {
-                    Set-Rendering -Item $aeroPage -Instance $aeroImageGalleryRendering -FinalLayout
-                }
-            }
-            
-            $aeroPageHeaderRendering = Get-Rendering -Item $aeroPage -Rendering $renderingPageHeader -FinalLayout
-            if (!$aeroPageHeaderRendering) {
-                Write-Verbose "Adding PageHeader rendering to Aero page"
-                $renderingPageHeaderDefinition = $renderingPageHeader | New-Rendering
-                Add-Rendering -Item $aeroPage -PlaceHolder "headless-main" -Instance $renderingPageHeaderDefinition -FinalLayout
-                $aeroPageHeaderRendering = Get-Rendering -Item $aeroPage -Rendering $renderingPageHeader -FinalLayout
-            }
-            if ($aeroPageHeaderRendering) {
-                if ($pageHeaderVariant) {
-                    Set-Rendering -Item $aeroPage -Instance $aeroPageHeaderRendering -Parameter @{ "FieldNames" = $pageHeaderVariant.ID } -FinalLayout
-                } else {
-                    Set-Rendering -Item $aeroPage -Instance $aeroPageHeaderRendering -FinalLayout
-                }
-            }
+            Get-Rendering -Item $aeroPage -Rendering $renderingImageGallery -FinalLayout | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = $imageGalleryVariant.ID } | `
+                Set-Rendering -Item $aeroPage -FinalLayout
+            Get-Rendering -Item $aeroPage -Rendering $renderingPageHeader -FinalLayout | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = $pageHeaderVariant.ID } | `
+                Set-Rendering -Item $aeroPage -FinalLayout
             Get-Rendering -Item $aeroPage -Rendering $renderingTextBanner -FinalLayout | `
                 Set-RenderingParameter -Parameter @{ "FieldNames" = $textBannerVariant.ID } | `
                 Set-Rendering -Item $aeroPage -FinalLayout
             # update Test Drive landing
-            Write-Verbose "Updating Test Drive landing renderings"
-            
-            $testDrivePageHeaderRendering = Get-Rendering -Item $testDriveItem -Rendering $renderingPageHeader -FinalLayout
-            if (!$testDrivePageHeaderRendering) {
-                Write-Verbose "Adding PageHeader rendering to Test Drive page"
-                $renderingPageHeaderDefinition = $renderingPageHeader | New-Rendering
-                Add-Rendering -Item $testDriveItem -PlaceHolder "headless-main" -Instance $renderingPageHeaderDefinition -FinalLayout
-                $testDrivePageHeaderRendering = Get-Rendering -Item $testDriveItem -Rendering $renderingPageHeader -FinalLayout
-            }
-            if ($testDrivePageHeaderRendering) {
-                if ($pageHeaderVariant) {
-                    Set-Rendering -Item $testDriveItem -Instance $testDrivePageHeaderRendering -Parameter @{ "FieldNames" = $pageHeaderVariant.ID } -FinalLayout
-                } else {
-                    Set-Rendering -Item $testDriveItem -Instance $testDrivePageHeaderRendering -FinalLayout
-                }
-            }
+            Get-Rendering -Item $testDriveItem -Rendering $renderingPageHeader -FinalLayout | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = $pageHeaderVariant.ID } | `
+                Set-Rendering -Item $testDriveItem -FinalLayout
             Get-Rendering -Item $testDriveItem -Rendering $renderingPromo -FinalLayout | `
                 Set-RenderingParameter -Parameter @{ "FieldNames" = $promoVariant.ID } | `
                 Set-Rendering -Item $testDriveItem -FinalLayout
             Get-Rendering -Item $testDriveItem -Rendering $renderingAccordion -FinalLayout | `
                 Set-RenderingParameter -Parameter @{ "FieldNames" = $accordion5050Variant.ID } | `
                 Set-Rendering -Item $testDriveItem -FinalLayout
-            $testDriveLocSearchRendering = Get-Rendering -Item $testDriveItem -Rendering $renderingLocationSearch -FinalLayout
-            if (!$testDriveLocSearchRendering) {
-                Write-Verbose "Adding LocationSearch rendering to Test Drive page"
-                $renderingLocationSearchDefinition = $renderingLocationSearch | New-Rendering
-                Add-Rendering -Item $testDriveItem -PlaceHolder "headless-main" -Instance $renderingLocationSearchDefinition -FinalLayout
-                $testDriveLocSearchRendering = Get-Rendering -Item $testDriveItem -Rendering $renderingLocationSearch -FinalLayout
-            }
-            if ($testDriveLocSearchRendering) {
-                if ($locSearchVariant) {
-                    Set-Rendering -Item $testDriveItem -Instance $testDriveLocSearchRendering -Parameter @{ "FieldNames" = $locSearchVariant.ID } -FinalLayout
-                } else {
-                    Set-Rendering -Item $testDriveItem -Instance $testDriveLocSearchRendering -FinalLayout
-                }
-            }
-            
-            $testDriveSubFormRendering = Get-Rendering -Item $testDriveItem -Rendering $renderingSubmissionForm -FinalLayout
-            if (!$testDriveSubFormRendering) {
-                Write-Verbose "Adding SubmissionForm rendering to Test Drive page"
-                $renderingSubmissionFormDefinition = $renderingSubmissionForm | New-Rendering
-                Add-Rendering -Item $testDriveItem -PlaceHolder "headless-main" -Instance $renderingSubmissionFormDefinition -FinalLayout
-                $testDriveSubFormRendering = Get-Rendering -Item $testDriveItem -Rendering $renderingSubmissionForm -FinalLayout
-            }
-            if ($testDriveSubFormRendering) {
-                if ($subFormVariant) {
-                    Set-Rendering -Item $testDriveItem -Instance $testDriveSubFormRendering -Parameter @{ "FieldNames" = $subFormVariant.ID } -FinalLayout
-                } else {
-                    Set-Rendering -Item $testDriveItem -Instance $testDriveSubFormRendering -FinalLayout
-                }
-            }
+            Get-Rendering -Item $testDriveItem -Rendering $renderingLocationSearch -FinalLayout | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = $locSearchVariant.ID } | `
+                Set-Rendering -Item $testDriveItem -FinalLayout
+            Get-Rendering -Item $testDriveItem -Rendering $renderingSubmissionForm -FinalLayout | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = $subFormVariant.ID } | `
+                Set-Rendering -Item $testDriveItem -FinalLayout
       
             Write-Verbose "Update home page fields"
             $title = "Alaris - Get set for an electric future."
@@ -422,20 +348,34 @@ SharedFields:
             $item."ogDescription" = $title
     
             # Add Promo variants
-            $promoVariantPath = Get-Item -Path "$sitePath/Presentation/Headless Variants/Promo" -Language $Site.Language
-            $imageLeftVariant = New-Item -Parent $promoVariantPath -Name "ImageLeft" -ItemType "{4D50CDAE-C2D9-4DE8-B080-8F992BFB1B55}"
+            $promoVariant = Get-Item -Path "$sitePath/Presentation/Headless Variants/Promo" -Language $Site.Language
+            $imageLeftVariant = New-Item -Parent $promoVariant -Name "ImageLeft" -ItemType "{4D50CDAE-C2D9-4DE8-B080-8F992BFB1B55}"
             $imageLeftVariant.'__Display name' = "Image Left"
-            $imageMiddleVariant = New-Item -Parent $promoVariantPath -Name "ImageMiddle" -ItemType "{4D50CDAE-C2D9-4DE8-B080-8F992BFB1B55}"
+            $imageMiddleVariant = New-Item -Parent $promoVariant -Name "ImageMiddle" -ItemType "{4D50CDAE-C2D9-4DE8-B080-8F992BFB1B55}"
             $imageMiddleVariant.'__Display name' = "Image Middle"
-            $imageRightVariant = New-Item -Parent $promoVariantPath -Name "ImageRight" -ItemType "{4D50CDAE-C2D9-4DE8-B080-8F992BFB1B55}"
+            $imageRightVariant = New-Item -Parent $promoVariant -Name "ImageRight" -ItemType "{4D50CDAE-C2D9-4DE8-B080-8F992BFB1B55}"
             $imageRightVariant.'__Display name' = "Image Right"
-            $titlePartialOverlayVariant = New-Item -Parent $promoVariantPath -Name "TitlePartialOverlay" -ItemType "{4D50CDAE-C2D9-4DE8-B080-8F992BFB1B55}"
+            $titlePartialOverlayVariant = New-Item -Parent $promoVariant -Name "TitlePartialOverlay" -ItemType "{4D50CDAE-C2D9-4DE8-B080-8F992BFB1B55}"
             $titlePartialOverlayVariant.'__Display name' = "Title Partial Overlay"
     
             Write-Verbose "Create dictionary items"
             $dictionaryRoot = Get-Item -Path "$sitePath/Dictionary" -Language $Site.Language
             $dictionaryBranchTemplate = Get-Item -Path "/sitecore/templates/Branches/Project/click-click-launch/Alaris/Add Dictionary Items" -Language $Site.Language
             New-Item -Parent $dictionaryRoot -Name "Dictionary Items" -ItemType $dictionaryBranchTemplate.ID
+            
+            Write-Verbose "Clear caches and refresh layout service for deployment"
+            try {
+                # Clear Sitecore caches to ensure changes are reflected
+                [Sitecore.Caching.CacheManager]::ClearAllCaches()
+                Write-Verbose "Successfully cleared all caches"
+                
+                # Refresh the home page item to ensure layout service gets updated data
+                $item = Get-Item -Path "$sitePath/Home" -Language $Site.Language
+                Write-Verbose "Refreshed home page item for layout service"
+                
+            } catch {
+                Write-Warning "Failed to clear caches or refresh layout service: $_"
+            }
         }
         
         end {
