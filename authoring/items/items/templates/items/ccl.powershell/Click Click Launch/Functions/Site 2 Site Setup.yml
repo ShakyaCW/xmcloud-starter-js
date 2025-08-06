@@ -162,9 +162,10 @@ SharedFields:
             # Get-Item -Path "$($item.ItemPath)/Products/Nexa/Data/Page Header 2" -Language $Site.Language | Update-LinkField -FieldName "link1" -TargetItem $testDriveItem
             # Get-Item -Path "$($item.ItemPath)/Products/Nexa/Data/Page Header 2" -Language $Site.Language | Update-LinkField -FieldName "link2" -TargetItem $item
             
-            # Add Terra page header link updates
+            # Add Terra page header and accordion link updates
             Get-Item -Path "$($item.ItemPath)/Products/Terra/Data/Page Header 2" -Language $Site.Language | Update-LinkField -FieldName "link1" -TargetItem $testDriveItem
             Get-Item -Path "$($item.ItemPath)/Products/Terra/Data/Page Header 2" -Language $Site.Language | Update-LinkField -FieldName "link2" -TargetItem $item
+            Get-Item -Path "$($item.ItemPath)/Products/Terra/Data/Accordion - Terra - Demo Official" -Language $Site.Language | Update-LinkField -FieldName "link" -TargetItem $terraPage
             
             Write-Verbose "Update product pages with the correct taxonomy"
             $productTag = Get-Item -Path "$sitePath/Data/Taxonomy/Content Types/Product" -Language $Site.Language
@@ -232,6 +233,7 @@ SharedFields:
             $promoVariant = $promoVariants | Where-Object { $_.Name -eq "Default" }
             $accordionVariant = $accordionVariants | Where-Object { $_.Name -eq "Default" }
             $accordion5050Variant = $accordionVariants | Where-Object { $_.Name -eq "Fifty Fifty Title Above" }
+            $accordionCenteredVariant = $accordionVariants | Where-Object { $_.Name -eq "Centered" }
             $imageGalleryVariant = $imageGalleryVariants | Where-Object { $_.Name -eq "Default" }
             $pageHeaderVariant = $pageHeaderVariants | Where-Object { $_.Name -eq "Default" }
             $locSearchVariant = $locSearchVariants | Where-Object { $_.Name -eq "Default" }
@@ -300,6 +302,12 @@ SharedFields:
                 Set-Rendering -Item $terraPage -FinalLayout
             Get-Rendering -Item $terraPage -Rendering $renderingTextBanner -FinalLayout | `
                 Set-RenderingParameter -Parameter @{ "FieldNames" = $textBannerVariant.ID } | `
+                Set-Rendering -Item $terraPage -FinalLayout
+            Get-Rendering -Item $terraPage -Rendering $renderingPromo -FinalLayout | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = $promoVariant.ID } | `
+                Set-Rendering -Item $terraPage -FinalLayout
+            Get-Rendering -Item $terraPage -Rendering $renderingAccordion -FinalLayout | `
+                Set-RenderingParameter -Parameter @{ "FieldNames" = $accordionCenteredVariant.ID } | `
                 Set-Rendering -Item $terraPage -FinalLayout
       
             Write-Verbose "Update home page fields"
